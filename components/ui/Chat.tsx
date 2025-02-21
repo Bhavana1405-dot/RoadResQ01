@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 "use client";
 
 import { useState, useEffect } from "react";
@@ -100,3 +101,195 @@ export default function Chat() {
     </motion.div>
   );
 }
+=======
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+import SocketClient from "@/lib/socket-client";
+
+interface Message {
+  text: string;
+  userId: string;
+  timestamp: string;
+  id: string;
+}
+
+const MessageBubble = ({ message, isOwnMessage }: { message: Message; isOwnMessage: boolean }) => (
+  <div
+    className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
+  >
+    <div
+      className={`max-w-[80%] rounded-lg p-3 ${
+        isOwnMessage
+          ? 'bg-purple-600 text-white'
+          : 'bg-gray-700 text-gray-200'
+      }`}
+    >
+      <div className="break-words">{message.text}</div>
+      <div className="text-xs mt-1 opacity-75">
+        {new Date(message.timestamp).toLocaleTimeString()}
+      </div>
+    </div>
+  </div>
+);
+
+export default function Chat() {
+  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const socketRef = useRef<any>(null);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  useEffect(() => {
+    if (!isClient) return;
+
+    try {
+      // Load saved messages
+      const saved = localStorage.getItem("chatMessages");
+      if (saved) {
+        const parsedMessages = JSON.parse(saved);
+        setMessages(parsedMessages);
+      }
+
+      // Initialize socket
+      const socket = SocketClient.getInstance({
+        url: "http://192.168.137.1:3003"
+      });
+      
+      socketRef.current = socket;
+
+      socket.on("connect", () => {
+        setIsConnected(true);
+      });
+
+      socket.on("disconnect", () => {
+        setIsConnected(false);
+      });
+
+      socket.on("receiveMessage", (message: Message) => {
+        setMessages(prev => {
+          if (prev.some(m => m.id === message.id)) {
+            return prev;
+          }
+          const updated = [...prev, message];
+          localStorage.setItem("chatMessages", JSON.stringify(updated));
+          return updated;
+        });
+      });
+
+      return () => {
+        socket.off("connect");
+        socket.off("disconnect");
+        socket.off("receiveMessage");
+      };
+    } catch (error) {
+      console.error("Error in chat initialization:", error);
+    }
+  }, [isClient]);
+
+  const generateMessageId = () => {
+    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  };
+
+  const handleSend = () => {
+    if (!input.trim() || !isClient || !socketRef.current) return;
+
+    try {
+      const socket = socketRef.current;
+      
+      const newMessage: Message = {
+        text: input.trim(),
+        userId: socket.id || 'local',
+        timestamp: new Date().toISOString(),
+        id: generateMessageId()
+      };
+
+      setMessages(prev => {
+        const updated = [...prev, newMessage];
+        localStorage.setItem("chatMessages", JSON.stringify(updated));
+        return updated;
+      });
+
+      socket.emit("sendMessage", newMessage);
+      setInput("");
+    } catch (error) {
+      console.error("Error sending message:", error);
+    }
+  };
+
+  if (!isClient) {
+    return (
+      <div className="flex flex-col h-full bg-gray-900">
+        <div className="bg-purple-600 p-4 rounded-t-lg">
+          <h2 className="text-white font-semibold">RoadResQ Chat</h2>
+          <div className="text-xs text-purple-200">Connecting...</div>
+        </div>
+        <div className="flex-1 p-4">
+          <div className="text-center text-gray-500">Loading chat...</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full bg-gray-900">
+      <div className="bg-purple-600 p-4 rounded-t-lg">
+        <h2 className="text-white font-semibold">RoadResQ Chat</h2>
+        <div className="text-xs text-purple-200">
+          {isConnected ? "Connected " : "Disconnected "}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4">
+        {messages.length === 0 ? (
+          <div className="text-center text-gray-500">
+            No messages yet. Start a conversation!
+          </div>
+        ) : (
+          messages.map(msg => (
+            <div key={msg.id} className="mb-4">
+              <MessageBubble 
+                message={msg} 
+                isOwnMessage={msg.userId === socketRef.current?.id} 
+              />
+            </div>
+          ))
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      <div className="p-4 bg-gray-800 border-t border-gray-700">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            placeholder="Type a message..."
+            className="flex-1 p-2 rounded bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          />
+          <button
+            onClick={handleSend}
+            className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+          >
+            Send
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+>>>>>>> 7f5fc52 (first commit)
